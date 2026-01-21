@@ -38,6 +38,19 @@ CREATE INDEX IF NOT EXISTS idx_application_skill_set_application_id
 CREATE INDEX IF NOT EXISTS idx_application_skill_set_skill_id
   ON application_skill_set(skill_id);
 
+CREATE VIEW IF NOT EXISTS v_application_skills AS
+SELECT
+  app.id AS application_id,
+  ass.skill_id,
+  s.name AS skill_name,
+  s.is_soft_skill,
+  ass.create_time AS linked_time
+FROM application AS app
+JOIN application_skill_set AS ass
+  ON ass.application_id = app.id
+JOIN skills AS s
+  ON s.id = ass.skill_id;
+
 CREATE TRIGGER IF NOT EXISTS trg_skills_update_time
 AFTER UPDATE ON skills
 FOR EACH ROW
