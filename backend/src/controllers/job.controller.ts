@@ -1,19 +1,13 @@
 import { Request, Response } from "express";
-import { normalizeJobData } from "../services/jobParser.service";
 import {
   createApplication,
   deleteApplication,
   getApplicationById,
+  importApplicationFromLink,
   listApplications,
   updateApplication,
   ApplicationStatus
 } from "../services/job.service";
-
-export function normalizeJob(req: Request, res: Response): void {
-  const { company, title } = req.body ?? {};
-  const normalized = normalizeJobData({ company, title });
-  res.json({ data: normalized });
-}
 
 function parseApplicationId(req: Request, res: Response): number | null {
   const id = Number(req.params.id);
@@ -190,4 +184,28 @@ export async function deleteApplicationHandler(
   }
 
   res.status(204).send();
+}
+
+export async function importApplicationHandler(
+  req: Request,
+  res: Response
+): Promise<void> {
+  const { url, status } = req.body ?? {};
+
+  if (!url || typeof url !== "string") {
+    res.status(400).json({ error: "url is required" });
+    return;
+  }
+
+  if (status !== undefined && !isValidStatus(status)) {
+    res.status(400).json({ error: "Invalid status" });
+    return;
+  }
+
+  try {
+    const application = await importApplicationFromLink({ url, status });
+    res.status(201).json({ data: application });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to import application" });
+  }
 }

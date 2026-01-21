@@ -1,4 +1,5 @@
 import { initDatabase } from "../db/database";
+import { getGeminiModel } from "./gemini.service";
 
 export type ApplicationStatus = "applied" | "interview" | "rejected" | "closed";
 
@@ -42,6 +43,11 @@ export interface ListApplicationsQuery {
   offset?: number;
 }
 
+export interface ImportApplicationInput {
+  url: string;
+  status?: ApplicationStatus;
+}
+
 function mapRowToApplication(row: any): Application {
   return {
     id: row.id,
@@ -65,6 +71,61 @@ function parseSkillList(value?: string | null): string[] {
     .map((item) => item.trim())
     .filter((item) => item.length > 0);
   return Array.from(new Set(parts));
+}
+
+async function fetchPageText(url: string): Promise<string> {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch url: ${response.status}`);
+  }
+  const html = await response.text();
+  const withoutScripts = html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ");
+  const text = withoutScripts.replace(/<[^>]*>/g, " ");
+  return text.replace(/\s+/g, " ").trim().slice(0, 12000);
+}
+
+function parseGeminiJson(text: string): Record<string, unknown> {
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start === -1 || end === -1 || end <= start) {
+    throw new Error("Gemini response did not contain JSON");
+  }
+  const jsonText = text.slice(start, end + 1);
+  return JSON.parse(jsonText);
+}
+
+async function analyzeJobContent(
+  url: string,
+  pageText: string
+): Promise<CreateApplicationInput> {
+  const model = getGeminiModel();
+  const prompt = [
+    "Extract job application data from the content below.",
+    "Return JSON only with keys:",
+    "companyName, jobTitle, location, sourceUrl, status, applyTime, softSkills, skills.",
+    "softSkills and skills must be comma-separated strings.",
+    "If a value is missing, return null.",
+    `Use sourceUrl = "${url}".`,
+    "",
+    "Content:",
+    pageText
+  ].join("\n");
+
+  const result = await model.generateContent(prompt);
+  const payload = parseGeminiJson(result.response.text());
+
+  return {
+    companyName: (payload.companyName as string) ?? "",
+    jobTitle: (payload.jobTitle as string) ?? null,
+    location: (payload.location as string) ?? null,
+    sourceUrl: (payload.sourceUrl as string) ?? url,
+    status: (payload.status as ApplicationStatus) ?? "applied",
+    applyTime: (payload.applyTime as string) ?? null,
+    softSkills: (payload.softSkills as string) ?? null,
+    skills: (payload.skills as string) ?? null
+  };
 }
 
 async function getOrCreateSkills(
@@ -263,4 +324,18 @@ export async function deleteApplication(id: number): Promise<boolean> {
   const db = await initDatabase();
   const result = await db.run("DELETE FROM application WHERE id = ?", id);
   return typeof result.changes === "number" && result.changes > 0;
+}
+
+export async function importApplicationFromLink(
+  input: ImportApplicationInput
+): Promise<Application> {
+  const pageText = await fetchPageText(input.url);
+  const analysis = await analyzeJobContent(input.url, pageText);
+  if (!analysis.companyName) {
+    throw new Error("Gemini analysis missing companyName");
+  }
+  return createApplication({
+    ...analysis,
+    status: input.status ?? analysis.status ?? "applied"
+  });
 }

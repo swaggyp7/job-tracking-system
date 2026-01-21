@@ -1,0 +1,27 @@
+@import "tailwindcss";
+@import url("https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap");
+@config "../tailwind.config.ts";
+
+:root {
+  color-scheme: light;
+  --ink-900: #0f172a;
+  --ink-700: #334155;
+  --surface: #f8fafc;
+  --accent: #f97316;
+  --accent-2: #0ea5e9;
+}
+
+body {
+  margin: 0;
+  font-family: "Instrument Sans", "Segoe UI", sans-serif;
+  color: var(--ink-900);
+  background:
+    radial-gradient(800px 400px at 10% 10%, #ffedd5 0%, transparent 60%),
+    radial-gradient(900px 480px at 90% 0%, #e0f2fe 0%, transparent 55%),
+    linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  min-height: 100vh;
+}
+
+.font-display {
+  font-family: "Space Grotesk", "Segoe UI", sans-serif;
+}

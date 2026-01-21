@@ -3,15 +3,15 @@ import {
   createApplicationHandler,
   deleteApplicationHandler,
   getApplicationHandler,
+  importApplicationHandler,
   listApplicationsHandler,
-  normalizeJob,
   updateApplicationHandler
 } from "../controllers/job.controller";
 
 const router = Router();
 
-router.post("/jobs/normalize", normalizeJob);
 router.post("/applications", createApplicationHandler);
+router.post("/applications/import", importApplicationHandler);
 router.get("/applications", listApplicationsHandler);
 router.get("/applications/:id", getApplicationHandler);
 router.put("/applications/:id", updateApplicationHandler);
