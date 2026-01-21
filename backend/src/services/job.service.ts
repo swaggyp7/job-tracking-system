@@ -93,7 +93,7 @@ async function getOrCreateSkills(
       name,
       isSoftSkill
     );
-    existingMap.set(name, result.lastID);
+    existingMap.set(name, result.lastID as number);
   }
 
   return names.map((name) => existingMap.get(name) as number);
@@ -154,8 +154,8 @@ export async function createApplication(
 
   const softSkillNames = parseSkillList(input.softSkills);
   const requiredSkillNames = parseSkillList(input.skills);
-  await syncApplicationSkills(result.lastID, softSkillNames, 1);
-  await syncApplicationSkills(result.lastID, requiredSkillNames, 0);
+  await syncApplicationSkills(result.lastID as number, softSkillNames, 1);
+  await syncApplicationSkills(result.lastID as number, requiredSkillNames, 0);
 
   const row = await db.get(
     "SELECT * FROM application WHERE id = ?",
@@ -262,5 +262,5 @@ export async function updateApplication(
 export async function deleteApplication(id: number): Promise<boolean> {
   const db = await initDatabase();
   const result = await db.run("DELETE FROM application WHERE id = ?", id);
-  return result.changes > 0;
+  return typeof result.changes === "number" && result.changes > 0;
 }
