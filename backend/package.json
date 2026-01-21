@@ -15,12 +15,14 @@
   "type": "commonjs",
   "dependencies": {
     "@google/generative-ai": "^0.24.0",
+    "cors": "^2.8.5",
     "dotenv": "^16.6.1",
     "express": "^5.2.1",
     "sqlite": "^5.1.1",
     "sqlite3": "^5.1.7"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/jest": "^30.0.0",
     "@types/node": "^25.0.9",
