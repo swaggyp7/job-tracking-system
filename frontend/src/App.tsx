@@ -162,7 +162,7 @@ function App() {
               >
                 Refresh
               </button>
-              <div className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white">
+              <div className="w-20 rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white">
                 {applications.length} total
               </div>
             </div>
