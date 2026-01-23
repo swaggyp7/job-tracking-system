@@ -15,6 +15,11 @@ interface Application {
   updateTime: string;
 }
 
+interface ApplicationDetail extends Application {
+  softSkills: string[];
+  skills: string[];
+}
+
 const statusStyles: Record<ApplicationStatus, string> = {
   applied: "bg-amber-100 text-amber-800",
   interview: "bg-sky-100 text-sky-800",
@@ -55,6 +60,15 @@ function App() {
     useState<ApplicationStatus>("applied");
   const [importLoading, setImportLoading] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
+  const [selectedApplication, setSelectedApplication] =
+    useState<Application | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const [applicationDetail, setApplicationDetail] =
+    useState<ApplicationDetail | null>(null);
+  const [statusUpdating, setStatusUpdating] = useState<Set<number>>(
+    () => new Set()
+  );
 
   const refresh = async () => {
     setLoading(true);
@@ -76,6 +90,47 @@ function App() {
   useEffect(() => {
     refresh();
   }, []);
+
+  useEffect(() => {
+    if (!selectedApplication) {
+      setApplicationDetail(null);
+      setDetailError(null);
+      setDetailLoading(false);
+      return;
+    }
+
+    let isActive = true;
+    setDetailLoading(true);
+    setDetailError(null);
+    api
+      .get(`/applications/${selectedApplication.id}/detail`)
+      .then((response) => {
+        if (!isActive) {
+          return;
+        }
+        setApplicationDetail(response.data?.data ?? null);
+      })
+      .catch((err) => {
+        if (!isActive) {
+          return;
+        }
+        const message =
+          axios.isAxiosError(err) && err.response?.data?.error
+            ? String(err.response.data.error)
+            : "Failed to load application detail";
+        setDetailError(message);
+        setApplicationDetail(null);
+      })
+      .finally(() => {
+        if (isActive) {
+          setDetailLoading(false);
+        }
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [selectedApplication]);
 
   const filtered = useMemo(() => {
     const keyword = search.trim().toLowerCase();
@@ -132,6 +187,49 @@ function App() {
       setImportError(message);
     } finally {
       setImportLoading(false);
+    }
+  };
+
+  const handleStatusChange = async (
+    app: Application,
+    nextStatus: ApplicationStatus
+  ) => {
+    if (app.status === nextStatus) {
+      return;
+    }
+    setStatusUpdating((prev) => {
+      const next = new Set(prev);
+      next.add(app.id);
+      return next;
+    });
+    setError(null);
+
+    try {
+      const response = await api.put(`/applications/${app.id}`, {
+        status: nextStatus
+      });
+      const updated = response.data?.data ?? { ...app, status: nextStatus };
+      setApplications((prev) =>
+        prev.map((item) => (item.id === app.id ? updated : item))
+      );
+      setSelectedApplication((prev) =>
+        prev && prev.id === app.id ? updated : prev
+      );
+      setApplicationDetail((prev) =>
+        prev && prev.id === app.id ? { ...prev, status: updated.status } : prev
+      );
+    } catch (err) {
+      const message =
+        axios.isAxiosError(err) && err.response?.data?.error
+          ? String(err.response.data.error)
+          : "Failed to update status";
+      setError(message);
+    } finally {
+      setStatusUpdating((prev) => {
+        const next = new Set(prev);
+        next.delete(app.id);
+        return next;
+      });
     }
   };
 
@@ -242,44 +340,79 @@ function App() {
               {filtered.map((app) => (
                 <article
                   key={app.id}
-                  className="rounded-3xl border border-slate-200 bg-white px-5 py-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                  className="group rounded-3xl border border-slate-200 bg-white px-5 py-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
                 >
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
-                        {app.location || "Remote"}
-                      </p>
-                      <h3 className="font-display text-xl font-semibold text-slate-900">
-                        {app.companyName}
-                      </h3>
-                      <p className="text-sm text-slate-600">
-                        {app.jobTitle || "Role not specified"}
-                      </p>
+                  <div className="flex flex-col gap-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-[180px]">
+                        <p className="text-[11px] uppercase tracking-[0.3em] text-slate-400">
+                          {app.location || "Remote"}
+                        </p>
+                        <h3 className="font-display text-xl font-semibold text-slate-900">
+                          {app.companyName}
+                        </h3>
+                        <p className="text-sm text-slate-600">
+                          {app.jobTitle || "Role not specified"}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs font-semibold ${statusStyles[app.status]}`}
+                        >
+                          {app.status}
+                        </span>
+                        <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-500">
+                          Applied: {formatDate(app.applyTime)}
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex flex-col items-start gap-2 sm:items-end">
-                      <span
-                        className={`rounded-full px-3 py-1 text-xs font-semibold ${statusStyles[app.status]}`}
-                      >
-                        {app.status}
-                      </span>
+
+                    <div className="flex flex-wrap items-center gap-3">
+                      <div className="flex items-center gap-2">
+                        <label className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+                          Status
+                        </label>
+                        <select
+                          value={app.status}
+                          onChange={(event) =>
+                            handleStatusChange(
+                              app,
+                              event.target.value as ApplicationStatus
+                            )
+                          }
+                          disabled={statusUpdating.has(app.id)}
+                          className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-70"
+                        >
+                          {statusOptions.map((status) => (
+                            <option key={status} value={status}>
+                              {status}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                       <span className="text-xs text-slate-400">
-                        Applied: {formatDate(app.applyTime)}
+                        Updated: {formatDate(app.updateTime)}
                       </span>
+                      <div className="ml-auto flex items-center gap-2">
+                        {app.sourceUrl && (
+                          <a
+                            className="text-xs font-semibold text-orange-600 hover:text-orange-700"
+                            href={app.sourceUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Open source
+                          </a>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setSelectedApplication(app)}
+                          className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300"
+                        >
+                          View
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                  <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-slate-500">
-                    <span>Created: {formatDate(app.createTime)}</span>
-                    <span>Updated: {formatDate(app.updateTime)}</span>
-                    {app.sourceUrl && (
-                      <a
-                        className="ml-auto text-xs font-semibold text-orange-600 hover:text-orange-700"
-                        href={app.sourceUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        Open source
-                      </a>
-                    )}
                   </div>
                 </article>
               ))}
@@ -362,6 +495,128 @@ function App() {
           </div>
         </section>
       </div>
+      {selectedApplication && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4 py-6">
+          <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
+                  {selectedApplication.location || "Remote"}
+                </p>
+                <h3 className="font-display text-2xl font-semibold text-slate-900">
+                  {selectedApplication.companyName}
+                </h3>
+                <p className="text-sm text-slate-600">
+                  {selectedApplication.jobTitle || "Role not specified"}
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span
+                  className={`rounded-full px-3 py-1 text-xs font-semibold ${statusStyles[selectedApplication.status]}`}
+                >
+                  {selectedApplication.status}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedApplication(null)}
+                  className="rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+
+            {detailLoading && (
+              <div className="mt-6 rounded-2xl border border-dashed border-slate-200 bg-white/70 px-4 py-6 text-sm text-slate-500">
+                Loading details...
+              </div>
+            )}
+            {detailError && (
+              <div className="mt-6 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4 text-sm text-rose-700">
+                {detailError}
+              </div>
+            )}
+
+            <div className="mt-6 grid gap-4 sm:grid-cols-2">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
+                  Applied
+                </p>
+                <p className="text-sm font-semibold text-slate-700">
+                  {formatDate(selectedApplication.applyTime)}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
+                  Updated
+                </p>
+                <p className="text-sm font-semibold text-slate-700">
+                  {formatDate(selectedApplication.updateTime)}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                Source Link
+              </p>
+              {selectedApplication.sourceUrl ? (
+                <a
+                  className="mt-2 inline-flex items-center text-sm font-semibold text-orange-600 hover:text-orange-700"
+                  href={selectedApplication.sourceUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Open source
+                </a>
+              ) : (
+                <p className="mt-2 text-sm text-slate-400">-</p>
+              )}
+            </div>
+
+            <div className="mt-6 grid gap-6 sm:grid-cols-2">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                  Soft Skills
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {applicationDetail?.softSkills?.length ? (
+                    applicationDetail.softSkills.map((skill) => (
+                      <span
+                        key={skill}
+                        className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800"
+                      >
+                        {skill}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-sm text-slate-400">-</span>
+                  )}
+                </div>
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                  Skills
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {applicationDetail?.skills?.length ? (
+                    applicationDetail.skills.map((skill) => (
+                      <span
+                        key={skill}
+                        className="rounded-full bg-sky-100 px-3 py-1 text-xs font-semibold text-sky-800"
+                      >
+                        {skill}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-sm text-slate-400">-</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

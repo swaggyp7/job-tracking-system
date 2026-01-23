@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import {
   createApplication,
   deleteApplication,
+  getApplicationDetail,
   getApplicationById,
   importApplicationFromLink,
   listApplications,
@@ -108,6 +109,24 @@ export async function getApplicationHandler(
   }
 
   const application = await getApplicationById(id);
+  if (!application) {
+    res.status(404).json({ error: "Application not found" });
+    return;
+  }
+
+  res.json({ data: application });
+}
+
+export async function getApplicationDetailHandler(
+  req: Request,
+  res: Response
+): Promise<void> {
+  const id = parseApplicationId(req, res);
+  if (id === null) {
+    return;
+  }
+
+  const application = await getApplicationDetail(id);
   if (!application) {
     res.status(404).json({ error: "Application not found" });
     return;

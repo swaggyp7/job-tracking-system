@@ -15,6 +15,11 @@ export interface Application {
   updateTime: string;
 }
 
+export interface ApplicationDetail extends Application {
+  softSkills: string[];
+  skills: string[];
+}
+
 export interface CreateApplicationInput {
   companyName: string;
   jobTitle?: string | null;
@@ -204,13 +209,12 @@ export async function createApplication(
     `INSERT INTO application
       (company_name, job_title, location, source_url, status, apply_time)
      VALUES
-      (?, ?, ?, ?, ?, ?)`,
+      (?, ?, ?, ?, ?, datetime('now'))`,
     input.companyName,
     input.jobTitle ?? null,
     input.location ?? null,
     input.sourceUrl ?? null,
-    input.status ?? "applied",
-    input.applyTime ?? null
+    input.status ?? "applied"
   );
 
   const softSkillNames = parseSkillList(input.softSkills);
@@ -234,6 +238,43 @@ export async function getApplicationById(
     return null;
   }
   return mapRowToApplication(row);
+}
+
+async function getApplicationSkills(
+  applicationId: number
+): Promise<{ softSkills: string[]; skills: string[] }> {
+  const db = await initDatabase();
+  const rows = await db.all(
+    `SELECT skill_name, is_soft_skill
+     FROM v_application_skills
+     WHERE application_id = ?
+     ORDER BY skill_name ASC`,
+    applicationId
+  );
+
+  const softSkills: string[] = [];
+  const skills: string[] = [];
+  for (const row of rows) {
+    if (row.is_soft_skill === 1) {
+      softSkills.push(row.skill_name);
+    } else {
+      skills.push(row.skill_name);
+    }
+  }
+
+  return { softSkills, skills };
+}
+
+export async function getApplicationDetail(
+  id: number
+): Promise<ApplicationDetail | null> {
+  const application = await getApplicationById(id);
+  if (!application) {
+    return null;
+  }
+
+  const { softSkills, skills } = await getApplicationSkills(id);
+  return { ...application, softSkills, skills };
 }
 
 export async function listApplications(
